@@ -1,6 +1,6 @@
 import {startGame} from "/game/prototype.js";
-
-const api_path = "http://127.0.0.1:8000/api/gameapi/";
+const api_path = "http://ec2-35-88-153-74.us-west-2.compute.amazonaws.com:8000/api/gameapi/";
+const ws_path = "ws://ec2-35-88-153-74.us-west-2.compute.amazonaws.com:8000/ws/game/";
 
 let pollInterval = null;
 let socket = null;
@@ -38,7 +38,7 @@ export async function connectSocket(matchId) { // returns match websocket, socke
         return false;
     }
     return new Promise((resolve, reject) => {
-        const socket = new WebSocket(`ws://localhost:8000/ws/game/${matchId}/?token=${token}`);
+        const socket = new WebSocket(`${ws_path}${matchId}/?token=${token}`);
         
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);

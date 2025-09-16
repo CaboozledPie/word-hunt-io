@@ -163,8 +163,14 @@ CHANNEL_LAYERS = {
 # redis stuff
 
 REDIS_CONFIG = {
-    "host": "localhost",
+    "host": "http://ec2-35-88-153-74.us-west-2.compute.amazonaws.com/",
     "port": 6379,
     "db": 0,
     "decode_responses": True
 }
+
+# discord nonsense
+
+DISCORD_CLIENT_ID = "1417276800895156290"
+#DISCORD_CLIENT_SECRET = not putting this here lol
+DISCORD_REDIRECT_URI = 
