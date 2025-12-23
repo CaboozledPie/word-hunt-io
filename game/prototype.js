@@ -1,4 +1,4 @@
-import {Tile, Board} from "./board.js";
+import {Tile, Board, GameTimer} from "./board.js";
 import {DICTIONARY_READY} from "./dictionarytools.js";
 
 const canvas = document.getElementById("gameCanvas");
@@ -200,11 +200,33 @@ const boardOffset = canvas.width / 20;
 const tileSize = (canvas.width - boardOffset * 2) / boardShape.length; // for our tests 200
 const tileOffset = tileSize / 20; // margin around each tile so theyre not hugging, purely visual
 
-// wait until dictionary is loaded before starting le game
-DICTIONARY_READY.then(() => {
-    // even this behavior should probably be sectioned off later but for now it's going in here
-    var gameBoard = new Board(boardShape);
-    gameBoard.generateLetters();
-    gameBoard.solve();
-    loop(gameBoard);
-});
+export function startGame(seed = null, socket = null, timer=80, player_cache = null) { // match contains settings
+    // wait until dictionary is loaded before starting le game
+    DICTIONARY_READY.then(() => {
+        // even this behavior should probably be sectioned off later but for now it's going in here
+        if (!player_cache) { // match state
+            var gameBoard = new Board(boardShape, "skindefault", socket);
+        }
+        else { // blank, default
+            var gameBoard = new Board(boardShape, "skindefault", socket,
+                player_cache["score"], player_cache["found_words"]);
+        }
+        var gameTimer = new GameTimer(timer,
+            (remaining) => { // called each tick
+                document.getElementById("timer").textContent = `Time Remaining: ${remaining}`
+            },
+            () => { // called on timer end
+                socket.send(JSON.stringify({
+                    type: "gameFinished",
+                }));
+                gameBoard.turnOff();
+                alert("out of time gg"); // SUBJECT TO CHANGE
+            }
+        );
+        gameBoard.generateLetters(seed);
+        gameBoard.solve();
+        console.log("Game started with seed: ", seed);
+        gameTimer.start();
+        loop(gameBoard);
+    });
+};

@@ -103,7 +103,8 @@ Tile.prototype.getAnimationType = function() {
 };
 
 /**this board class is basically the entire game. everything relevant is in here.**/
-var Board = function(shape, skin = "skindefault") { // input shape as 0 for unfilled, 1 for filled
+// input shape as 0 for unfilled, 1 for filled
+var Board = function(shape, skin = "skindefault", socket = null, score = 0, words = []) {
     if (shape.length !== shape[0].length) {
         throw new Error("board shape must be inputted as square for Board() constructor");
     }
@@ -111,27 +112,38 @@ var Board = function(shape, skin = "skindefault") { // input shape as 0 for unfi
     this.skin = skin;
     this.currentWord = []; // array of arrays of length 2 [row, col]
     this.currentTile = []; // length 2, row and col
-    this.usedWords = new Set(); // hashmap for yellow
-    this.score = 0;
+    this.usedWords = new Set(words); // hashmap for yellow
+    this.score = score;
     this.key = []; // sorted list of answers
+    this.socket = socket
+    this.takeInputs = true; // if timer <= 0, set to false
 };
 
 // make the board according to letter distribution (bag w/o replacement)
-Board.prototype.generateLetters = function(letters = []) {
+Board.prototype.generateLetters = function(seed = "") {
     // make a copy of the frequency so you have a bag w/o replacement
+    if (seed !== "") {
+        if (seed.length !== this.dim() * this.dim() * 2) {
+            console.log(seed, seed.length);
+            throw new Error("invalid seed for Board.generateLetters()");
+        }
+    }
     var bag = LETTER_FREQUENCY;
     for (var row = 0; row < this.board.length; row++) {
         for (var col = 0; col < this.board[0].length; col++) {
             if (this.board[row][col] === 1) { // only make tiles at 
-                var generateRandom = Math.floor(Math.random() * bag.length);
-                var generateLetter = bag[generateRandom];
-                bag.splice(generateRandom, 1);
-                if (letters.length === this.board.length) { // this trusts that letters is a safe format!
-                   this.board[row][col] = new Tile(letters[row][col], row, col); 
+                if (seed !== "") { // we have a seed!
+                    const seedIdx = (row * this.dim() + col) * 2;
+                    if (seed[seedIdx] === "0") var generateRandom = Number(seed[seedIdx + 1]);
+                    else var generateRandom = Number(seed.substring(seedIdx, seedIdx + 2));
+                    var generateLetter = bag[generateRandom];
                 }
                 else {
-                    this.board[row][col] = new Tile(generateLetter, row, col);
+                    var generateRandom = Math.floor(Math.random() * bag.length);
+                    var generateLetter = bag[generateRandom];
                 }
+                bag.splice(generateRandom, 1);
+                this.board[row][col] = new Tile(generateLetter, row, col);
             }
         }
     }
@@ -225,22 +237,24 @@ Board.prototype.selectTile = function(row, col) { // returns 1 if new tile selec
 
 Board.prototype.clearGuess = function() { // call every time mouse is released
     // check the guess
-    if (this.evaluateGuess() == 1) {
+    if (this.evaluateGuess() == 1 && this.takeInputs) {
         // give points
+        var scoreIncrement = 0;
         switch (this.currentWord.length) {
             case 3:
-                this.score += 100;
+                scoreIncrement = 100;
                 break;
             case 4:
-                this.score += 400;
+                scoreIncrement = 400;
                 break;
             case 5:
-                this.score += 800;
+                scoreIncrement = 800;
                 break;
             default:
-                this.score += 400 * this.currentWord.length - 1000
+                scoreIncrement = 400 * this.currentWord.length - 1000
                 break;
         }
+        this.score += scoreIncrement;
 
         // add to history
         var guess = "";
@@ -248,6 +262,19 @@ Board.prototype.clearGuess = function() { // call every time mouse is released
             guess += this.currentWord[i].getLetter();
         }
         this.usedWords.add(guess);
+
+        // it's socketing time
+        if (this.socket) {
+            this.socket.send(JSON.stringify({
+                type: "foundWord",
+                info: {
+                    word: guess,
+                    length: this.currentWord.length,
+                    score: this.score,
+                }
+            }));
+        }
+        else console.log("no socket word");
     }
     
     // reset all tiles
@@ -318,4 +345,38 @@ Board.prototype.getWordCount = function() {
     return this.usedWords.size;
 };
 
-export {Tile, Board};
+Board.prototype.turnOff = function() { // animations will still work, just no score
+    this.takeInputs = false;
+};
+
+var GameTimer = function(duration, onTick, onEnd) {
+    this.duration = duration; // in seconds
+    this.remaining = duration;
+    this.interval = null;
+    this.onTick = onTick; // function on tick
+    this.onEnd = onEnd; // function on end
+    this.active = false;
+}
+
+GameTimer.prototype.start = function() {
+    if (this.running) return; // if running can't start
+    this.running = true;
+
+    this.interval = setInterval(() => {
+        this.remaining -= 1;
+        if (this.onTick) this.onTick(this.remaining);
+
+        if (this.remaining <= 0) {
+            this.stop();
+            if (this.onEnd) this.onEnd();
+        }
+    }, 1000);
+}
+
+GameTimer.prototype.stop = function() {
+    clearInterval(this.interval);
+    this.remaining = 0;
+    this.running = false;
+}
+
+export {Tile, Board, GameTimer};
